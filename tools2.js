@@ -3,7 +3,7 @@ const request = require('request-promise');
 
 module.exports= {goingDown, goingUp, getBank, getState};
 
-const swing = 0.000001;
+const swing = 0.005;
 
 let state = 'SELL';
 let bank = 500;
@@ -37,6 +37,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req) {
                 uptick += 1
                 return wait(time).then(() => goingDown(ogPrice, curPrice, req));
               } else {
+                uptick = 0;
                 if (state === 'SELL' && curPrice/ogPrice < 1 - swing) {
                   state = 'BUY';
                   ammountBought = bank / curPrice;
@@ -74,7 +75,8 @@ function goingUp(ogPrice, lastPrice = ogPrice, req) {
                   downtick += 1
                   return wait(time).then(() => goingUp(ogPrice, curPrice, req));
                 } else {
-                  if (state === 'BUY' && curPrice/ogPrice >= 1) {
+                  downtick = 0;
+                  if (state === 'BUY' && curPrice/ogPrice >= 1.003) {
                       state = 'SELL';
                       // console.log('Sell', curPrice);
                       curPrice = Number.parseFloat(curPrice);

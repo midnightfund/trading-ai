@@ -22,7 +22,7 @@ async function goingDown(ogPrice, lastPrice = ogPrice, userId, req) {
           db.updateState(userId, 'SELL');
           curPrice = Number.parseFloat(curPrice);
           db.updateLastPrice(userId, curPrice);
-          db.updateBank(userId, curPrice * db.getCoinAmmount(userId))
+          db.updateBank(userId, await db.getBank(userId) + (curPrice * await db.getCoinAmmount(userId)));
           db.updateCoinAmmount(userId, 0)
         }
         console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
@@ -35,7 +35,7 @@ async function goingDown(ogPrice, lastPrice = ogPrice, userId, req) {
         } else {
           if (await db.getState(userId) === 'SELL' && curPrice/ogPrice < 1 - swing) {
             db.updateState(userId, 'BUY')
-            db.updateCoinAmmount(userId, await db.getBank(userId) / curPrice)
+            await db.updateCoinAmmount(userId, await db.getBank(userId) / curPrice)
             // console.log(`Buy here | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
             // console.log('Buy', curPrice);
             curPrice = Number.parseFloat(curPrice);

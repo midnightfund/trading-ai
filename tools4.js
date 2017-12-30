@@ -171,3 +171,14 @@ async function getCurPrice() {
   };
   return request(opts)
 }
+
+
+
+// getCurPrice()
+// .then(r => {
+//   let curPrice = Number.parseFloat(r.data.price);
+//   console.log(curPrice);
+//   return sell(curPrice)
+//   .then(r => console.log('sold', r))
+//   .catch(e => console.log('error', e))
+// })

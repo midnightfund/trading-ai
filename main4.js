@@ -1,5 +1,5 @@
 const express = require('express');
-const request = require('request-promise');
+const request = require('axios');
 const {goingDown, goingUp, getBank, getState} = require('./tools4');
 
 const app = express();
@@ -19,7 +19,7 @@ app.get('/products', (req, res) => {
     // request.get('https://sandbox-api.cobinhood.com/v1/market/currencies')
     let opts = {
         method: 'GET',
-        uri: 'https://api.gdax.com/products',
+        url: 'https://api.gdax.com/products',
         headers: {
             'User-Agent': 'express'
         }
@@ -40,7 +40,7 @@ app.get('/products/:id', (req, res) => {
     // request.get('https://sandbox-api.cobinhood.com/v1/market/currencies')
     let opts = {
         method: 'GET',
-        uri: `https://api.gdax.com/products/${req.params.id}/ticker`,
+        url: `https://api.gdax.com/products/${req.params.id}/ticker`,
         headers: {
           'User-Agent': 'express'
         }
@@ -48,7 +48,7 @@ app.get('/products/:id', (req, res) => {
 
     request(opts)
         .then(r => {
-            r = JSON.parse(r);
+            r = r.data;
             // goingDown(r.price, undefined, opts);
             goingUp(r.price, undefined, opts);
             res.send(r);

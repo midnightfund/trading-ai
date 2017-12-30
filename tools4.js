@@ -1,14 +1,13 @@
 const request = require('axios');
 const {API_SECRET, API_KEY, PASSPHRASE} = require('./secrets.js');
+const {getState, updateState, getLastBoughtPrice, updateLastPrice} = require('./db2.js');
 const crypto = require('crypto');
 const _ = require('lodash');
 
-module.exports= {goingDown, goingUp, getState};
+module.exports= {goingDown, goingUp, getCurrentState, changeState};
 
 const swing = 0.005;
 
-let state = 'SELL';
-var lastAmmount = null;
 let uptick = 0;
 let downtick = 0;
 
@@ -17,12 +16,13 @@ const time = 90000
 function goingDown(ogPrice, lastPrice = ogPrice, req) {
   return request(req)
   .then(async function(res) {
+    let lastAmmount = await getLastBoughtPrice(0, 'BTC-USD');
     let curPrice = Number.parseFloat(res.data.price);
     // console.log(`curPrice`, curPrice)
     if (curPrice / lastPrice <= 1) {
       if (uptick >= 0.25) uptick -= 0.25;
       // cut losses if we buy and it starts to drop
-      if (state === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .99) {
+      if (await getState(0) === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .99) {
         await sell(curPrice)
       }
       console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
@@ -34,7 +34,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req) {
         return wait(time).then(() => goingDown(ogPrice, curPrice, req));
       } else {
         uptick = 0;
-        if (state === 'SELL' && curPrice/ogPrice < 1 - swing) {
+        if (await getState(0) === 'SELL' && curPrice/ogPrice < 1 - swing) {
           await buy(curPrice);
         }
         return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req)
@@ -49,6 +49,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req) {
 function goingUp(ogPrice, lastPrice = ogPrice, req) {
   return request(req)
   .then(async function(res) {
+    let lastAmmount = await getLastBoughtPrice(0, 'BTC-USD');
     let curPrice = Number.parseFloat(res.data.price);
     if (curPrice/ lastPrice >= 1) {
       if (downtick >= 0.25) downtick -= 0.25;
@@ -62,7 +63,7 @@ function goingUp(ogPrice, lastPrice = ogPrice, req) {
       } else {
         downtick = 0;
         // Sell when start going down and if the peak is more than what we bought for
-        if (state === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
+        if (await getState(0) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
           await sell(curPrice)
         }
         return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req)
@@ -78,8 +79,8 @@ function wait(num) {
   return new Promise((res, rej) => setTimeout(res, num));
 }
 
-function getState() {
-  return state;
+async function getCurrentState() {
+  return await getState(0);
 }
 
 async function getAccountBalance(currency) {
@@ -98,10 +99,7 @@ async function getAmountToBuy(curPrice) {
 }
 
 async function buy(curPrice) {
-  state = 'BUY';
-  lastAmmount = curPrice;
   let amount = await getAmountToBuy(curPrice);
-  console.log(`Bought ${amount} at ${curPrice}`);
   let body = {
     size: amount.toString(),
     price: curPrice.toString(),
@@ -109,13 +107,14 @@ async function buy(curPrice) {
     product_id: "BTC-USD"
   }
   let newReq = createRequest('POST', '/orders', body)
-  return request(newReq);
+  await request(newReq);
+  console.log(`Bought ${amount} at ${curPrice}`);
+  await changeState(0, 'BUY');
+  await updateLastPrice(0, 'BTC-USD', curPrice)
+  return;
 }
 
 async function sell(curPrice) {
-  state = 'SELL';
-  lastAmmount = null;
-  console.log(`Sold ${await getAccountBalance('BTC')} at ${curPrice}`);
   let body = {
     "size": (await getAccountBalance('BTC')).toString(),
     "price": curPrice.toString(),
@@ -123,8 +122,11 @@ async function sell(curPrice) {
     "product_id": "BTC-USD"
   }
   let newReq = createRequest('POST', '/orders', body)
-  console.log('newReq', newReq);
-  return request(newReq);
+  await request(newReq);
+  console.log(`Sold ${await getAccountBalance('BTC')} at ${curPrice}`);
+  await changeState(0, 'SELL')
+  await updateLastPrice(0, 'BTC-USD', null)
+  return;
 }
 
 function signHeader(timestamp, method, requestPath, body) {
@@ -172,6 +174,14 @@ async function getCurPrice() {
   return request(opts)
 }
 
+async function changeState() {
+  if (await getState(0) === 'BUY') {
+    await updateState(0, 'SELL')
+  } else {
+    await updateState(0, 'BUY')
+  }
+  return await getState(0);
+}
 
 
 // getCurPrice()

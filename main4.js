@@ -1,6 +1,6 @@
 const express = require('express');
 const request = require('axios');
-const {goingDown, goingUp, getBank, getState} = require('./tools4');
+const {goingDown, goingUp, changeState, getCurrentState} = require('./tools4');
 
 const app = express();
 
@@ -11,8 +11,12 @@ app.use(function(req, res, next) {
 });
 
 
-app.get('/state', (req, res) => {
-    res.send(getState())
+app.get('/state', async function(req, res) {
+    res.send(await getCurrentState())
+});
+
+app.get('/change', async function(req, res) {
+    res.send(await changeState())
 });
 
 app.get('/products', (req, res) => {

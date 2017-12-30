@@ -92,7 +92,9 @@ async function getAccountBalance(currency) {
 }
 
 async function getAmountToBuy(curPrice) {
-  return (await getAccountBalance('USD') / curPrice).toFixed(7);
+  let balance = await getAccountBalance('USD')
+  let balanceWithFee = balance - (balance * 0.0035);
+  return (balanceWithFee / curPrice).toFixed(7);
 }
 
 async function buy(curPrice) {
@@ -107,7 +109,6 @@ async function buy(curPrice) {
     product_id: "BTC-USD"
   }
   let newReq = createRequest('POST', '/orders', body)
-  console.log('newReq', newReq);
   return request(newReq);
 }
 
@@ -116,12 +117,13 @@ async function sell(curPrice) {
   lastAmmount = null;
   console.log(`Sold ${await getAccountBalance('BTC')} at ${curPrice}`);
   let body = {
-    "size": await getAccountBalance('BTC').toString(),
+    "size": (await getAccountBalance('BTC')).toString(),
     "price": curPrice.toString(),
     "side": "sell",
     "product_id": "BTC-USD"
   }
   let newReq = createRequest('POST', '/orders', body)
+  console.log('newReq', newReq);
   return request(newReq);
 }
 
@@ -155,7 +157,7 @@ function createRequest(method, path, body) {
       'User-Agent': 'express'
     }
   }
-  if (body) req.body = body;
+  if (body) req.data = JSON.parse(body);
   return req;
 }
 
@@ -169,30 +171,3 @@ async function getCurPrice() {
   };
   return request(opts)
 }
-
-
-
-getCurPrice()
-.then(r => {
-  let curPrice = Number.parseFloat(r.data.price);
-  console.log(curPrice);
-  return buy(curPrice)
-  .then(r => console.log('sold', r))
-  .catch(e => console.log('error', e))
-})
-
-// getAccountBalance('USD')
-// .then(r => console.log(r))
-
-//////////////////////////////////
-// let opts = {
-//   method: 'POST',
-//   url: 'https://httpbin.org/post',
-//   body: {
-//     this: 'thing'
-//   }
-// }
-// const r = require('axios');
-// r(opts)
-//   .then(r => console.log('sold', r))
-//   .catch(e => console.log('error', e))

@@ -1,77 +1,100 @@
 const request = require('axios');
 const {API_SECRET, API_KEY, PASSPHRASE} = require('./secrets.js');
-const {getState, updateState, getLastBoughtPrice, updateLastPrice} = require('./db2.js');
+const {getState, updateState, getLastBoughtPrice, updateLastPrice, createUser, getCoin} = require('./db2.js');
+const expect = require('chai').expect;
 const crypto = require('crypto');
 const _ = require('lodash');
 
-module.exports= {goingDown, goingUp, getCurrentState, changeState};
+module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell};
 
 const swing = 0.005;
 
 let uptick = 0;
 let downtick = 0;
 
-const time = 90000
+const time = 60000
 
-function goingDown(ogPrice, lastPrice = ogPrice, req) {
+function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
   .then(async function(res) {
-    let lastAmmount = await getLastBoughtPrice(0, 'BTC-USD');
+    let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
+    if (lastAmmount) ogPrice = lastAmmount;
     let curPrice = Number.parseFloat(res.data.price);
     // console.log(`curPrice`, curPrice)
     if (curPrice / lastPrice <= 1) {
       if (uptick >= 0.25) uptick -= 0.25;
       // cut losses if we buy and it starts to drop
-      if (await getState(0) === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .99) {
-        await sell(curPrice)
+      if (await getState(user_id) === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .97) {
+        await sell(curPrice, user_id)
       }
       console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
-      return wait(time).then(() => goingDown(ogPrice, curPrice, req));
+      return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
-      if (uptick <= 3.5) {
-        console.log('uptick');
-        uptick += 1
-        return wait(time).then(() => goingDown(ogPrice, curPrice, req));
-      } else {
-        uptick = 0;
-        if (await getState(0) === 'SELL' && curPrice/ogPrice < 1 - swing) {
-          await buy(curPrice);
+      if (uptick > 0.75 && await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - 0.0085) {
+        await buy(curPrice, user_id);
+        return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
+      } else if (uptick <= 3.5) {
+        console.log('uptick - ', curPrice);
+        if (curPrice > ogPrice) {
+          console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+          return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
+        } else {
+          uptick += 1
+          return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
         }
-        return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req)
+      } else {
+        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+        uptick = 0;
+        if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - swing) {
+          await buy(curPrice, user_id);
+        }
+        return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
       }
     }
   })
   .catch(e => {
-    console.log('error', e)
+    console.log('error', e)//print and keep trying
+    wait(time).then(() => goingDown(ogPrice, lastPrice, req, user_id))
   })
 }
 
-function goingUp(ogPrice, lastPrice = ogPrice, req) {
+function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
   .then(async function(res) {
-    let lastAmmount = await getLastBoughtPrice(0, 'BTC-USD');
+    let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
+    if (lastAmmount) ogPrice = lastAmmount;
     let curPrice = Number.parseFloat(res.data.price);
     if (curPrice/ lastPrice >= 1) {
       if (downtick >= 0.25) downtick -= 0.25;
       console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
-      return wait(time).then(() => goingUp(ogPrice, curPrice, req));
+      return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
-      if (downtick <= 2) {
-        console.log('downtick');
-        downtick += 1
-        return wait(time).then(() => goingUp(ogPrice, curPrice, req));
+      if (downtick > 0.75 && await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.0085) {
+        await sell(curPrice, user_id)
+        return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
+      } else if (downtick <= 3.5) {
+        console.log('downtick - ', curPrice);
+        if (curPrice < ogPrice) {
+          console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+          return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
+        } else {
+          downtick += 1
+          return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
+        }
       } else {
+        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
         downtick = 0;
         // Sell when start going down and if the peak is more than what we bought for
-        if (await getState(0) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
-          await sell(curPrice)
+        if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
+          await sell(curPrice, user_id)
         }
-        return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req)
+        return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
       }
     }
   })
   .catch(e => {
-    console.log('error', e)
+    console.log('error', e)//print and keep trying
+    return wait(time).then(() => goingUp(ogPrice, lastPrice, req, user_id))
   })
 }
 
@@ -79,8 +102,8 @@ function wait(num) {
   return new Promise((res, rej) => setTimeout(res, num));
 }
 
-async function getCurrentState() {
-  return await getState(0);
+async function getCurrentState(user_id) {
+  return await getState(user_id);
 }
 
 async function getAccountBalance(currency) {
@@ -98,34 +121,37 @@ async function getAmountToBuy(curPrice) {
   return (balanceWithFee / curPrice).toFixed(7);
 }
 
-async function buy(curPrice) {
+async function buy(curPrice, user_id) {
+  if (await getAccountBalance('USD') < 2) { return; }
   let amount = await getAmountToBuy(curPrice);
   let body = {
     size: amount.toString(),
     price: curPrice.toString(),
     side: "buy",
-    product_id: "BTC-USD"
+    product_id: await getCoin(user_id)
   }
   let newReq = createRequest('POST', '/orders', body)
   await request(newReq);
   console.log(`Bought ${amount} at ${curPrice}`);
-  await changeState(0, 'BUY');
-  await updateLastPrice(0, 'BTC-USD', curPrice)
+  await changeState(user_id);
+  await updateLastPrice(user_id, await getCoin(user_id), curPrice)
   return;
 }
 
-async function sell(curPrice) {
+async function sell(curPrice, user_id) {
+  let size = await getAccountBalance((await getCoin(user_id)).split('-')[0]);
+  if (size < 0.000000) { return; } //Don't sell if we have nothing transfers take time
   let body = {
-    "size": (await getAccountBalance('BTC')).toString(),
+    "size": size.toString(),
     "price": curPrice.toString(),
     "side": "sell",
-    "product_id": "BTC-USD"
+    "product_id": await getCoin(user_id)
   }
   let newReq = createRequest('POST', '/orders', body)
   await request(newReq);
-  console.log(`Sold ${await getAccountBalance('BTC')} at ${curPrice}`);
-  await changeState(0, 'SELL')
-  await updateLastPrice(0, 'BTC-USD', null)
+  console.log(`Sold ${size} at ${curPrice}`);
+  await changeState(user_id)
+  await updateLastPrice(user_id, await getCoin(user_id), null)
   return;
 }
 
@@ -174,21 +200,19 @@ async function getCurPrice() {
   return request(opts)
 }
 
-async function changeState() {
-  if (await getState(0) === 'BUY') {
-    await updateState(0, 'SELL')
+async function changeState(user_id) {
+  if (await getState(user_id) === 'BUY') {
+    await updateState(user_id, 'SELL')
   } else {
-    await updateState(0, 'BUY')
+    await updateState(user_id, 'BUY')
   }
-  return await getState(0);
+  return await getState(user_id);
 }
 
-
-// getCurPrice()
-// .then(r => {
-//   let curPrice = Number.parseFloat(r.data.price);
-//   console.log(curPrice);
-//   return sell(curPrice)
-//   .then(r => console.log('sold', r))
-//   .catch(e => console.log('error', e))
-// })
+async function createNewUser(secrets, coin) {
+  expect(secrets).to.have.property('API_KEY');
+  expect(secrets).to.have.property('API_SECRET');
+  expect(secrets).to.have.property('API_PASSPHRASE');
+  // let encryptedSecrets = encrypt()
+  return await createUser(secrets, coin);
+}

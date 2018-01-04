@@ -5,7 +5,7 @@ const expect = require('chai').expect;
 const crypto = require('crypto');
 const _ = require('lodash');
 
-module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell};
+module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell, getAccount};
 
 const swing = 0.005;
 
@@ -17,32 +17,40 @@ const time = 60000
 function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
   .then(async function(res) {
+    // if bought then use that as the benchmark
     let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
     if (lastAmmount) ogPrice = lastAmmount;
     let curPrice = Number.parseFloat(res.data.price);
-    // console.log(`curPrice`, curPrice)
+
+    // if current price is less then last ie; going down
     if (curPrice / lastPrice <= 1) {
+      // don't buy immeditatly
       if (uptick >= 0.25) uptick -= 0.25;
       // cut losses if we buy and it starts to drop
       if (await getState(user_id) === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .97) {
         await sell(curPrice, user_id)
       }
       console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
+      // keeps going down so do all this again
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
+      // if there is more than one uptick and there is a big drop
       if (uptick > 0.75 && await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - 0.0085) {
         await buy(curPrice, user_id);
         return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
-      } else if (uptick <= 3.5) {
+      } else if (uptick <= 3.5) { // if there is an uptick
         console.log('uptick - ', curPrice);
         if (curPrice > ogPrice) {
+          // flip to upside but preserve the ogPrice
           console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
           return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
         } else {
+          // goes up slightly don't switch over to the up side just yet
           uptick += 1
           return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
         }
       } else {
+        // only buy if it hits the swing percent and then switch to the up side
         console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
         uptick = 0;
         if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - swing) {
@@ -210,9 +218,13 @@ async function changeState(user_id) {
 }
 
 async function createNewUser(secrets, coin) {
-  expect(secrets).to.have.property('API_KEY');
-  expect(secrets).to.have.property('API_SECRET');
-  expect(secrets).to.have.property('API_PASSPHRASE');
+  // expect(secrets).to.have.property('API_KEY');
+  // expect(secrets).to.have.property('API_SECRET');
+  // expect(secrets).to.have.property('API_PASSPHRASE');
   // let encryptedSecrets = encrypt()
   return await createUser(secrets, coin);
+}
+
+async function getAccount(id) {
+  return request(createRequest('GET', '/accounts'));
 }

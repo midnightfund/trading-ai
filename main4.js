@@ -109,7 +109,7 @@ app.post('/start/:id', (req, res) => {
 
   request(opts)
     .then(async function(r) {
-      let user_id = await createNewUser(req.body, req.params.id);//secrets and coin
+      let user_id = await createNewUser(req.params.id);//secrets and coin
       r = r.data;
       goingUp(r.price, undefined, opts, user_id);
       let out = {user_id}

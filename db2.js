@@ -41,17 +41,10 @@ async function updateLastPrice(user_id, coin, price) {
 }
 exp.updateLastPrice = updateLastPrice;
 
-async function createSecrets(user_id, secrets) {
-  let client = await connect();
-  let res = await client.query(`INSERT INTO secrets(api_key, api_secret, api_passphrase, user_id) VALUES ('${secrets['API_KEY']}', '${secrets['API_SECRET']}', '${secrets['API_PASSPHRASE']}', '${user_id}')`);
-  return client.end();
-}
-
-async function createUser(secrets, coin) {
+async function createUser(coin) {
   let client = await connect();
   let state = await client.query(`INSERT INTO states(coin, state) VALUES ('${coin}', 'SELL') RETURNING user_id`);
   let user_id = state.rows[0].user_id;
-  await createSecrets(user_id, secrets);
   return user_id;
 }
 exp.createUser = createUser;

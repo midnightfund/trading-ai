@@ -229,12 +229,12 @@ async function changeState(user_id) {
   return await getState(user_id);
 }
 
-async function createNewUser(secrets, coin) {
+async function createNewUser(coin) {
   // expect(secrets).to.have.property('API_KEY');
   // expect(secrets).to.have.property('API_SECRET');
   // expect(secrets).to.have.property('API_PASSPHRASE');
   // let encryptedSecrets = encrypt()
-  return await createUser(secrets, coin);
+  return await createUser(coin);
 }
 
 async function getAccount(id) {

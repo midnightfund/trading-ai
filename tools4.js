@@ -1,5 +1,5 @@
 const request = require('axios');
-const {API_SECRET, API_KEY, PASSPHRASE} = require('./secrets.js');
+// const {API_SECRET, API_KEY, PASSPHRASE} = require('./secrets.js');
 const {getState, updateState, getLastBoughtPrice, updateLastPrice, createUser, getCoin} = require('./db2.js');
 const expect = require('chai').expect;
 const crypto = require('crypto');

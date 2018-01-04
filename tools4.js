@@ -3,6 +3,7 @@ const request = require('axios');
 const {getState, updateState, getLastBoughtPrice, updateLastPrice, createUser, getCoin} = require('./db2.js');
 const expect = require('chai').expect;
 const crypto = require('crypto');
+const base64 = require('base-64');
 const _ = require('lodash');
 
 module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell, getAccount};
@@ -17,6 +18,7 @@ const time = 60000
 function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
   .then(async function(res) {
+
     // if bought then use that as the benchmark
     let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
     if (lastAmmount) ogPrice = lastAmmount;
@@ -114,8 +116,8 @@ async function getCurrentState(user_id) {
   return await getState(user_id);
 }
 
-async function getAccountBalance(currency) {
-  let res = await request(createRequest('GET', '/accounts'));
+async function getAccountBalance(currency, user_id) {
+  let res = await request(createRequest('GET', '/accounts', undefined, user_id));
   let usdBank = res.data.reduce((acc, cur) => {
     if (cur.currency.toUpperCase() === currency) acc = cur.balance;
     return acc;
@@ -123,22 +125,22 @@ async function getAccountBalance(currency) {
   return usdBank;
 }
 
-async function getAmountToBuy(curPrice) {
-  let balance = await getAccountBalance('USD')
+async function getAmountToBuy(curPrice, user_id) {
+  let balance = await getAccountBalance('USD', user_id)
   let balanceWithFee = balance - (balance * 0.0035);
   return (balanceWithFee / curPrice).toFixed(7);
 }
 
 async function buy(curPrice, user_id) {
-  if (await getAccountBalance('USD') < 2) { return; }
-  let amount = await getAmountToBuy(curPrice);
+  if (await getAccountBalance('USD', user_id) < 2) { return; }
+  let amount = await getAmountToBuy(curPrice, user_id);
   let body = {
     size: amount.toString(),
     price: curPrice.toString(),
     side: "buy",
     product_id: await getCoin(user_id)
   }
-  let newReq = createRequest('POST', '/orders', body)
+  let newReq = createRequest('POST', '/orders', body, user_id)
   await request(newReq);
   console.log(`Bought ${amount} at ${curPrice}`);
   await changeState(user_id);
@@ -147,7 +149,7 @@ async function buy(curPrice, user_id) {
 }
 
 async function sell(curPrice, user_id) {
-  let size = await getAccountBalance((await getCoin(user_id)).split('-')[0]);
+  let size = await getAccountBalance((await getCoin(user_id)).split('-')[0], user_id);
   if (size < 0.000000) { return; } //Don't sell if we have nothing transfers take time
   let body = {
     "size": size.toString(),
@@ -155,7 +157,7 @@ async function sell(curPrice, user_id) {
     "side": "sell",
     "product_id": await getCoin(user_id)
   }
-  let newReq = createRequest('POST', '/orders', body)
+  let newReq = createRequest('POST', '/orders', body, user_id)
   await request(newReq);
   console.log(`Sold ${size} at ${curPrice}`);
   await changeState(user_id)
@@ -163,8 +165,8 @@ async function sell(curPrice, user_id) {
   return;
 }
 
-function signHeader(timestamp, method, requestPath, body) {
-  let secret = API_SECRET;
+function signHeader(timestamp, method, requestPath, body, user_id) {
+  let secret = getSecrets(user_id).API_SECRET;
 
   var what = timestamp + method + requestPath;
   if (body) {
@@ -178,7 +180,9 @@ function signHeader(timestamp, method, requestPath, body) {
   return hmac.update(what).digest('base64');
 }
 
-function createRequest(method, path, body) {
+function createRequest(method, path, body, user_id) {
+  const API_KEY = getSecrets(user_id).API_KEY;
+  const PASSPHRASE = getSecrets(user_id).PASSPHRASE;
   if (body) body = JSON.stringify(body);
   let timestamp = Date.now() / 1000;
   method = method.toUpperCase();
@@ -189,12 +193,19 @@ function createRequest(method, path, body) {
       'CB-ACCESS-KEY': API_KEY,
       'CB-ACCESS-PASSPHRASE': PASSPHRASE,
       'CB-ACCESS-TIMESTAMP': timestamp,
-      'CB-ACCESS-SIGN': signHeader(timestamp, method, path, body),
+      'CB-ACCESS-SIGN': signHeader(timestamp, method, path, body, user_id),
       'User-Agent': 'express'
     }
   }
   if (body) req.data = JSON.parse(body);
   return req;
+}
+
+function getSecrets(user_id) {
+  let encoded = process.env[`gdax_secrets_${user_id}`]
+  let decoded = base64.decode(encodedData);
+  let secs = decoded.split('<+>');
+  return {API_KEY: secs[0], API_SECRET: secs[1], PASSPHRASE: secs[2]}
 }
 
 async function getCurPrice() {
@@ -226,5 +237,5 @@ async function createNewUser(secrets, coin) {
 }
 
 async function getAccount(id) {
-  return request(createRequest('GET', '/accounts'));
+  return request(createRequest('GET', '/accounts', undefined, id));
 }

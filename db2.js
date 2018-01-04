@@ -1,7 +1,7 @@
 const pg = require('pg');
 
 async function connect() {
-  let client = new pg.Client("postgres://localhost:5432/tradingBot");
+  let client = new pg.Client(process.env.DATABASE_URL);
   await client.connect();
   return client;
 }
@@ -55,14 +55,6 @@ async function createUser(secrets, coin) {
   return user_id;
 }
 exp.createUser = createUser;
-
-async function getSecrets(user_id) {
-  let client = await connect();
-  let res = await client.query(`SELECT * FROM secrets where user_id = ${user_id}`);
-  client.end();
-  return res.rows[0];
-}
-exp.getSecrets = getSecrets;
 
 async function getCoin(user_id) {
   let client = await connect();

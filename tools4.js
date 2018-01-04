@@ -3,7 +3,7 @@ const request = require('axios');
 const {getState, updateState, getLastBoughtPrice, updateLastPrice, createUser, getCoin} = require('./db2.js');
 const expect = require('chai').expect;
 const crypto = require('crypto');
-const base64 = require('base-64');
+const Base64 = require('js-base64').Base64;
 const _ = require('lodash');
 
 module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell, getAccount};
@@ -203,7 +203,8 @@ function createRequest(method, path, body, user_id) {
 
 function getSecrets(user_id) {
   let encoded = process.env[`gdax_secrets_${user_id}`]
-  let decoded = base64.decode(encodedData);
+  let decoded = Base64.decode(encoded);
+
   let secs = decoded.split('<+>');
   return {API_KEY: secs[0], API_SECRET: secs[1], PASSPHRASE: secs[2]}
 }

@@ -154,7 +154,6 @@ app.post('/account/:id', (req, res) => {
   })
 })
 
-
 app.get('/*', (req, res) => {
   res.write('catch all route');
   res.end();

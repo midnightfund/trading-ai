@@ -1,7 +1,7 @@
 const pg = require('pg');
 
 async function connect() {
-  let client = new pg.Client(process.env.DATABASE_URL);
+  let client = new pg.Client(process.env.DATABASE_URL || "postgres://localhost:5432/tradingBot");
   await client.connect();
   return client;
 }

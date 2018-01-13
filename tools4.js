@@ -32,7 +32,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
       if (await getState(user_id) === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .97) {
         await sell(curPrice, user_id)
       }
-      console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
+      console.log(`${user_id} down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       // keeps going down so do all this again
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
@@ -41,10 +41,10 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
         await buy(curPrice, user_id);
         return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
       } else if (uptick <= 3.5) { // if there is an uptick
-        console.log('uptick - ', curPrice);
+        console.log(`${user_id} uptick - `, curPrice);
         if (curPrice > ogPrice) {
           // flip to upside but preserve the ogPrice
-          console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+          console.log(`${user_id} flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
           return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
         } else {
           // goes up slightly don't switch over to the up side just yet
@@ -53,7 +53,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
         }
       } else {
         // only buy if it hits the swing percent and then switch to the up side
-        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+        console.log(`${user_id} switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
         uptick = 0;
         if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - swing) {
           await buy(curPrice, user_id);
@@ -63,7 +63,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
     }
   })
   .catch(e => {
-    console.log('error', e)//print and keep trying
+    console.log(`${user_id} error`, e)//print and keep trying
     wait(time).then(() => goingDown(ogPrice, lastPrice, req, user_id))
   })
 }
@@ -76,23 +76,23 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
     let curPrice = Number.parseFloat(res.data.price);
     if (curPrice/ lastPrice >= 1) {
       if (downtick >= 0.25) downtick -= 0.25;
-      console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
+      console.log(`${user_id} up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
       if (downtick > 0.75 && await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.0085) {
         await sell(curPrice, user_id)
         return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
       } else if (downtick <= 3.5) {
-        console.log('downtick - ', curPrice);
+        console.log(`${user_id} downtick - `, curPrice);
         if (curPrice < ogPrice) {
-          console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+          console.log(`${user_id} flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
           return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
         } else {
           downtick += 1
           return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
         }
       } else {
-        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+        console.log(`${user_id} switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
         downtick = 0;
         // Sell when start going down and if the peak is more than what we bought for
         if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
@@ -103,7 +103,7 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
     }
   })
   .catch(e => {
-    console.log('error', e)//print and keep trying
+    console.log(`${user_id} error`, e)//print and keep trying
     return wait(time).then(() => goingUp(ogPrice, lastPrice, req, user_id))
   })
 }
@@ -142,7 +142,7 @@ async function buy(curPrice, user_id) {
   }
   let newReq = createRequest('POST', '/orders', body, user_id)
   await request(newReq);
-  console.log(`Bought ${amount} at ${curPrice}`);
+  console.log(`${user_id} Bought ${amount} at ${curPrice}`);
   await changeState(user_id);
   await updateLastPrice(user_id, await getCoin(user_id), curPrice)
   return;
@@ -159,7 +159,7 @@ async function sell(curPrice, user_id) {
   }
   let newReq = createRequest('POST', '/orders', body, user_id)
   await request(newReq);
-  console.log(`Sold ${size} at ${curPrice}`);
+  console.log(`${user_id} Sold ${size} at ${curPrice}`);
   await changeState(user_id)
   await updateLastPrice(user_id, await getCoin(user_id), null)
   return;

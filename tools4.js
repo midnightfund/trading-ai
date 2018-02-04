@@ -25,7 +25,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
 
     // if current price is less then last ie; going down
     if (curPrice / lastPrice <= 1) {
-      console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
+      console.log(`${user_id} down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       // keeps going down so do all this again
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
@@ -107,7 +107,7 @@ async function buy(curPrice, user_id) {
   }
   let newReq = createRequest('POST', '/orders', body, user_id)
   await request(newReq);
-  console.log(`Bought ${amount} at ${curPrice}`);
+  console.log(`${user_id} Bought ${amount} at ${curPrice}`);
   await changeState(user_id);
   await updateLastPrice(user_id, await getCoin(user_id), curPrice)
   return;
@@ -124,7 +124,7 @@ async function sell(curPrice, user_id) {
   }
   let newReq = createRequest('POST', '/orders', body, user_id)
   await request(newReq);
-  console.log(`Sold ${size} at ${curPrice}`);
+  console.log(`${user_id} Sold ${size} at ${curPrice}`);
   await changeState(user_id)
   await updateLastPrice(user_id, await getCoin(user_id), null)
   return;

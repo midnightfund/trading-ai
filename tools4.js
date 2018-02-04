@@ -13,12 +13,11 @@ const swing = 0.005;
 let uptick = 0;
 let downtick = 0;
 
-const time = 60000
+const time = 900000
 
 function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
   .then(async function(res) {
-
     // if bought then use that as the benchmark
     let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
     if (lastAmmount) ogPrice = lastAmmount;
@@ -26,45 +25,21 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
 
     // if current price is less then last ie; going down
     if (curPrice / lastPrice <= 1) {
-      // don't buy immeditatly
-      if (uptick >= 0.25) uptick -= 0.25;
-      // cut losses if we buy and it starts to drop
-      if (await getState(user_id) === 'BUY' && lastAmmount !== null && curPrice/lastAmmount < .97) {
-        await sell(curPrice, user_id)
-      }
       console.log(`down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       // keeps going down so do all this again
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
-      // if there is more than one uptick and there is a big drop
-      if (uptick > 0.75 && await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - 0.0085) {
+      // only buy if it hits the swing percent and then switch to the up side
+      console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+      if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
         await buy(curPrice, user_id);
-        return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
-      } else if (uptick <= 3.5) { // if there is an uptick
-        console.log('uptick - ', curPrice);
-        if (curPrice > ogPrice) {
-          // flip to upside but preserve the ogPrice
-          console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
-          return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
-        } else {
-          // goes up slightly don't switch over to the up side just yet
-          uptick += 1
-          return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
-        }
-      } else {
-        // only buy if it hits the swing percent and then switch to the up side
-        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
-        uptick = 0;
-        if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1 - swing) {
-          await buy(curPrice, user_id);
-        }
-        return goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
       }
+      return wait(300000).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
     }
   })
   .catch(e => {
-    console.log('error', e)//print and keep trying
-    wait(time).then(() => goingDown(ogPrice, lastPrice, req, user_id))
+    console.log('error', e)   //print and keep trying
+    wait(300000).then(() => goingDown(ogPrice, lastPrice, req, user_id))
   })
 }
 
@@ -75,36 +50,26 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
     if (lastAmmount) ogPrice = lastAmmount;
     let curPrice = Number.parseFloat(res.data.price);
     if (curPrice/ lastPrice >= 1) {
-      if (downtick >= 0.25) downtick -= 0.25;
       console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
-      return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
+      return wait(300000).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
-      if (downtick > 0.75 && await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.0085) {
+      console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+      // Sell when start going down and if the peak is more than what we bought for
+      if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
         await sell(curPrice, user_id)
-        return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
-      } else if (downtick <= 3.5) {
-        console.log('downtick - ', curPrice);
-        if (curPrice < ogPrice) {
-          console.log(`flip | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
-          return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
-        } else {
-          downtick += 1
-          return wait(time).then(() => goingUp(ogPrice, curPrice, req, user_id));
-        }
+        return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+      } else if (getState(user_id) === 'BUY') {
+        console.log(`up again buy: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
+        return wait(300000).then(() => goingUp(ogPrice, curPrice, req, user_id))
       } else {
-        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
-        downtick = 0;
-        // Sell when start going down and if the peak is more than what we bought for
-        if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
-          await sell(curPrice, user_id)
-        }
-        return goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id)
+        console.log(`up switch: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
+        return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       }
     }
   })
   .catch(e => {
     console.log('error', e)//print and keep trying
-    return wait(time).then(() => goingUp(ogPrice, lastPrice, req, user_id))
+    return wait(300000).then(() => goingUp(ogPrice, lastPrice, req, user_id))
   })
 }
 

@@ -228,12 +228,9 @@ async function restartAll() {
       .then(function(r) {
         r = r.data;
         goingUp(r.price, undefined, opts, user_id);
-        let out = {user_id}
-        res.send(JSON.stringify(out));
       })
       .catch(e => {
         console.log('error', e);
-        res.send(e)
       })
   })
 }

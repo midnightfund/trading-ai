@@ -6,11 +6,11 @@ const crypto = require('crypto');
 const Base64 = require('js-base64').Base64;
 const _ = require('lodash');
 
-module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell, getAccount};
+module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser, buy, sell, getAccount, restartAll};
 
 const swing = 0.005;
 
-let uptick = 0;
+let upticks = {};
 let downtick = 0;
 
 const time = 900000
@@ -25,16 +25,22 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
 
     // if current price is less then last ie; going down
     if (curPrice / lastPrice <= 1) {
+      if (upticks[`user_${user_id}`] > 0) upticks[`user_${user_id}`] -= .5;
       console.log(`${user_id} down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       // keeps going down so do all this again
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
       // only buy if it hits the swing percent and then switch to the up side
-      console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
-      if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
-        await buy(curPrice, user_id);
+      if (upticks[`user_${user_id}`] <= 1) {
+        upticks[`user_${user_id}`] += 1;
+      } else {
+        upticks[`user_${user_id}`] = 0;
+        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+        if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
+          await buy(curPrice, user_id);
+        }
+        return wait(300000).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       }
-      return wait(300000).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
     }
   })
   .catch(e => {
@@ -204,4 +210,30 @@ async function createNewUser(coin) {
 
 async function getAccount(id) {
   return request(createRequest('GET', '/accounts', undefined, id));
+}
+
+async function restartAll() {
+  let user_ids = [1]; //only mine for now
+  console.log(`Restarting users: ${user_ids}`);
+  user_ids.map(async function(user_id) {
+    let coin = await getCoin(user_id);
+    let opts = {
+      method: 'GET',
+      url: `https://api.gdax.com/products/${coin}/ticker`,
+      headers: {
+        'User-Agent': 'express'
+      }
+    };
+    request(opts)
+      .then(function(r) {
+        r = r.data;
+        goingUp(r.price, undefined, opts, user_id);
+        let out = {user_id}
+        res.send(JSON.stringify(out));
+      })
+      .catch(e => {
+        console.log('error', e);
+        res.send(e)
+      })
+  })
 }

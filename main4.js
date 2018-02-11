@@ -5,7 +5,7 @@ const getCoin = require('./db2.js').getCoin;
 const expect = require('chai').expect;
 const bcrypt = require('bcrypt');
 const base64 = require('base-64');
-const {goingDown, goingUp, getCurrentState, createNewUser, buy, sell, getAccount} = require('./tools4');
+const {goingDown, goingUp, getCurrentState, createNewUser, buy, sell, getAccount, restartAll} = require('./tools4');
 
 const app = express();
 
@@ -163,4 +163,7 @@ app.post('/*', (req, res) => {
   res.end();
 });
 
-app.listen(process.env.PORT || 3000, () => console.log(`Listening on port ${process.env.PORT || 3000}!`));
+app.listen(process.env.PORT || 3000, () => {
+  console.log(`Listening on port ${process.env.PORT || 3000}!`);
+  restartAll();
+});

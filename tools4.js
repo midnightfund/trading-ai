@@ -33,6 +33,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
       // only buy if it hits the swing percent and then switch to the up side
       if (upticks[`user_${user_id}`] <= 1) {
         upticks[`user_${user_id}`] += 1;
+        return wait(300000).then(() => goingDown(ogPrice, curPrice, req, user_id));
       } else {
         upticks[`user_${user_id}`] = 0;
         console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);

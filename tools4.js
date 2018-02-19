@@ -11,9 +11,11 @@ module.exports= {goingDown, goingUp, getCurrentState, changeState, createNewUser
 const swing = 0.005;
 
 let upticks = {};
-let downtick = 0;
+let downticks = {};
 
-const time = 900000
+const time = 15000; // 15sec // used for going down
+const altTime = 5000; // 5sec // used for going up
+const retryTime = 60000 // used for retries
 
 function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
@@ -21,7 +23,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
     // if bought then use that as the benchmark
     let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
     if (lastAmmount) ogPrice = lastAmmount;
-    let curPrice = Number.parseFloat(res.data.price);
+    let curPrice = Number.parseFloat(res.data.result.ticker.last_trade_price);
 
     // if current price is less then last ie; going down
     if (curPrice / lastPrice <= 1) {
@@ -30,24 +32,16 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
       // keeps going down so do all this again
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
-      // only buy if it hits the swing percent and then switch to the up side
-      if (upticks[`user_${user_id}`] <= 1) {
-        upticks[`user_${user_id}`] += 1;
-        console.log('uptick: ', upticks);
-        return wait(300000).then(() => goingDown(ogPrice, curPrice, req, user_id));
-      } else {
-        upticks[`user_${user_id}`] = 0;
-        console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
-        if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
-          await buy(curPrice, user_id);
-        }
-        return wait(300000).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+      console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+      if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
+        await buy(curPrice, user_id);
       }
+      return wait(altTime).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
     }
   })
   .catch(e => {
     console.log('error', e)   //print and keep trying
-    wait(300000).then(() => goingDown(ogPrice, lastPrice, req, user_id))
+    wait(retryTime).then(() => goingDown(ogPrice, lastPrice, req, user_id))
   })
 }
 
@@ -56,19 +50,19 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
   .then(async function(res) {
     let lastAmmount = await getLastBoughtPrice(user_id, await getCoin(user_id));
     if (lastAmmount) ogPrice = lastAmmount;
-    let curPrice = Number.parseFloat(res.data.price);
+    let curPrice = Number.parseFloat(res.data.result.ticker.last_trade_price);
     if (curPrice/ lastPrice >= 1) {
       console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
-      return wait(300000).then(() => goingUp(ogPrice, curPrice, req, user_id));
+      return wait(altTime).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       // Sell when start going down and if the peak is more than what we bought for
-      if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1.003) { // this is the fee of GDAX
+      if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1) {
         await sell(curPrice, user_id)
         return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
-      } else if (getState(user_id) === 'BUY') {
+      } else if (await getState(user_id) === 'BUY') {
         console.log(`up again buy: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
-        return wait(300000).then(() => goingUp(ogPrice, curPrice, req, user_id))
+        return wait(altTime).then(() => goingUp(ogPrice, curPrice, req, user_id))
       } else {
         console.log(`up switch: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
         return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
@@ -77,7 +71,7 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
   })
   .catch(e => {
     console.log('error', e)//print and keep trying
-    return wait(300000).then(() => goingUp(ogPrice, lastPrice, req, user_id))
+    return wait(retryTime).then(() => goingUp(ogPrice, lastPrice, req, user_id))
   })
 }
 
@@ -90,9 +84,9 @@ async function getCurrentState(user_id) {
 }
 
 async function getAccountBalance(currency, user_id) {
-  let res = await request(createRequest('GET', '/accounts', undefined, user_id));
-  let usdBank = res.data.reduce((acc, cur) => {
-    if (cur.currency.toUpperCase() === currency) acc = cur.balance;
+  let res = await request(createRequest('GET', '/wallet/balances', undefined, user_id));
+  let usdBank = res.data.result.balances.reduce((acc, cur) => {
+    if (cur.currency.toUpperCase() === currency) acc = cur.total;
     return acc;
   }, null)
   return usdBank;
@@ -108,12 +102,13 @@ async function buy(curPrice, user_id) {
   if (await getAccountBalance('USD', user_id) < 2) { return; }
   let amount = await getAmountToBuy(curPrice, user_id);
   let body = {
-    size: amount.toString(),
-    price: curPrice.toString(),
-    side: "buy",
-    product_id: await getCoin(user_id)
+    "trading_pair_id": await getCoin(user_id),
+    "side": "bid",
+    "type": "limit",
+    "price": curPrice.toString(),
+    "size": amount.toString()
   }
-  let newReq = createRequest('POST', '/orders', body, user_id)
+  let newReq = createRequest('POST', '/trading/orders', body, user_id)
   await request(newReq);
   console.log(`${user_id} Bought ${amount} at ${curPrice}`);
   await changeState(user_id);
@@ -123,14 +118,15 @@ async function buy(curPrice, user_id) {
 
 async function sell(curPrice, user_id) {
   let size = await getAccountBalance((await getCoin(user_id)).split('-')[0], user_id);
-  if (size < 0.000000) { return; } //Don't sell if we have nothing transfers take time
+  if (size <= 0.000000) { return; } //Don't sell if we have nothing transfers take time
   let body = {
-    "size": size.toString(),
+    "trading_pair_id": await getCoin(user_id),
+    "side": "ask",
+    "type": "limit",
     "price": curPrice.toString(),
-    "side": "sell",
-    "product_id": await getCoin(user_id)
+    "size": size.toString()
   }
-  let newReq = createRequest('POST', '/orders', body, user_id)
+  let newReq = createRequest('POST', '/trading/orders', body, user_id)
   await request(newReq);
   console.log(`${user_id} Sold ${size} at ${curPrice}`);
   await changeState(user_id)
@@ -154,20 +150,14 @@ function signHeader(timestamp, method, requestPath, body, user_id) {
 }
 
 function createRequest(method, path, body, user_id) {
-  const API_KEY = getSecrets(user_id).API_KEY;
-  const PASSPHRASE = getSecrets(user_id).PASSPHRASE;
   if (body) body = JSON.stringify(body);
   let timestamp = Date.now() / 1000;
   method = method.toUpperCase();
   let req = {
     method: method,
-    url: 'https://api.gdax.com' + path,
+    url: 'https://api.cobinhood.com/v1' + path,
     headers: {
-      'CB-ACCESS-KEY': API_KEY,
-      'CB-ACCESS-PASSPHRASE': PASSPHRASE,
-      'CB-ACCESS-TIMESTAMP': timestamp,
-      'CB-ACCESS-SIGN': signHeader(timestamp, method, path, body, user_id),
-      'User-Agent': 'express'
+      'Authorization': `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfdG9rZW5faWQiOiI0ZTFhYmNiMy1hNTNkLTQyOTMtOWQ5NS1mNGVhNWNmNTk5MTMiLCJzY29wZSI6WyJzY29wZV9leGNoYW5nZV90cmFkZV9yZWFkIiwic2NvcGVfZXhjaGFuZ2VfdHJhZGVfd3JpdGUiLCJzY29wZV9leGNoYW5nZV9sZWRnZXJfcmVhZCJdLCJ1c2VyX2lkIjoiNWE5OGI3ZjYtMmRmMi00MGU3LTlkZWItMGViZTRmZWY2ODVlIn0.sF7GogbeYRZa1h8CJE8u9iu3ddgUzTUmLqdIACQkt_I.V1:cec75e8c28ff14cbd68b69a4385fa97e25170892015f6f39dfd8eb3321d59e94`
     }
   }
   if (body) req.data = JSON.parse(body);
@@ -185,7 +175,7 @@ function getSecrets(user_id) {
 async function getCurPrice() {
   let opts = {
       method: 'GET',
-      url: `https://api.gdax.com/products/BTC-USD/ticker`,
+      url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
       headers: {
         'User-Agent': 'express'
       }
@@ -211,28 +201,28 @@ async function createNewUser(coin) {
 }
 
 async function getAccount(id) {
-  return request(createRequest('GET', '/accounts', undefined, id));
+  return request(createRequest('GET', '/wallet/balances', undefined, id));
 }
 
 async function restartAll() {
+  return;
   let user_ids = [1]; //only mine for now
   console.log(`Restarting users: ${user_ids}`);
   user_ids.map(async function(user_id) {
     let coin = await getCoin(user_id);
     let opts = {
       method: 'GET',
-      url: `https://api.gdax.com/products/${coin}/ticker`,
+      url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
       headers: {
         'User-Agent': 'express'
       }
     };
     request(opts)
       .then(function(r) {
-        r = r.data;
-        goingUp(r.price, undefined, opts, user_id);
+        goingUp(r.data.result.ticker.last_trade_price, undefined, opts, user_id);
       })
       .catch(e => {
-        console.log('error', e);
+        console.log('error here', e);
       })
   })
 }

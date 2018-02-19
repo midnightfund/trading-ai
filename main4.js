@@ -37,7 +37,7 @@ app.post('/buy/:id', async function(req, res) {
   let coin = await getCoin(user_id);
   let opts = {
     method: 'GET',
-    url: `https://api.gdax.com/products/${coin}/ticker`,
+    url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
     headers: {
       'User-Agent': 'express'
     }
@@ -45,7 +45,7 @@ app.post('/buy/:id', async function(req, res) {
 
   request(opts)
     .then(async function(r) {
-      await buy(r.data.price, user_id);
+      await buy(r.data.result.ticker.last_trade_price, user_id);
       let out = {user_id}
       res.send(JSON.stringify(out));
     })
@@ -60,7 +60,7 @@ app.post('/sell/:id', async function(req, res) {
   let coin = await getCoin(user_id);
   let opts = {
     method: 'GET',
-    url: `https://api.gdax.com/products/${coin}/ticker`,
+    url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
     headers: {
       'User-Agent': 'express'
     }
@@ -68,7 +68,7 @@ app.post('/sell/:id', async function(req, res) {
 
   request(opts)
     .then(async function(r) {
-      await sell(r.data.price, user_id);
+      await sell(r.data.result.ticker.last_trade_price, user_id);
       let out = {user_id}
       res.send(JSON.stringify(out));
     })
@@ -82,14 +82,14 @@ app.get('/products', (req, res) => {
   // request.get('https://sandbox-api.cobinhood.com/v1/market/currencies')
   let opts = {
     method: 'GET',
-    url: 'https://api.gdax.com/products',
+    url: 'https://api.cobinhood.com/v1/market/currencies',
     headers: {
       'User-Agent': 'express'
     }
   }
   request(opts)
     .then(r => {
-      res.send(r.data);
+      res.send(r.data.result);
     })
     .catch(e => {
       console.log('err', e)
@@ -101,7 +101,7 @@ app.post('/start/:id', (req, res) => {
   // request.get('https://sandbox-api.cobinhood.com/v1/market/currencies')
   let opts = {
     method: 'GET',
-    url: `https://api.gdax.com/products/${req.params.id}/ticker`,
+    url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
     headers: {
       'User-Agent': 'express'
     }
@@ -110,8 +110,7 @@ app.post('/start/:id', (req, res) => {
   request(opts)
     .then(async function(r) {
       let user_id = await createNewUser(req.params.id);//secrets and coin
-      r = r.data;
-      goingUp(r.price, undefined, opts, user_id);
+      goingUp(r.data.result.ticker.last_trade_price, undefined, opts, user_id);
       let out = {user_id}
       res.send(JSON.stringify(out));
     })
@@ -126,15 +125,14 @@ app.post('/restart/:id', async function(req, res) {
   let coin = await getCoin(user_id)
   let opts = {
     method: 'GET',
-    url: `https://api.gdax.com/products/${coin}/ticker`,
+    url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
     headers: {
       'User-Agent': 'express'
     }
   };
   request(opts)
     .then(function(r) {
-      r = r.data;
-      goingUp(r.price, undefined, opts, user_id);
+      goingUp(r.data.result.ticker.last_trade_price, undefined, opts, user_id);
       let out = {user_id}
       res.send(JSON.stringify(out));
     })

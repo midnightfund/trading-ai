@@ -93,13 +93,13 @@ async function getAccountBalance(currency, user_id) {
 }
 
 async function getAmountToBuy(curPrice, user_id) {
-  let balance = await getAccountBalance('BTC', user_id)
+  let balance = await getAccountBalance(await getCoin(user_id).split('-')[1], user_id)
   // let balanceWithFee = balance - (balance * 0.0035);
   return (balance / curPrice).toFixed(7);
 }
 
 async function buy(curPrice, user_id) {
-  if (await getAccountBalance('BTC', user_id) <= 0) { return; }
+  if (await getAccountBalance(await getCoin(user_id).split('-')[1], user_id) <= 0) { return; }
   let amount = await getAmountToBuy(curPrice, user_id);
   let body = {
     "trading_pair_id": await getCoin(user_id),

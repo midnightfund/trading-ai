@@ -13,8 +13,8 @@ const swing = 0.005;
 let upticks = {};
 let downticks = {};
 
-const time = 15000; // 15sec // used for going down
-const altTime = 5000; // 5sec // used for going up
+const time = 30000; // 30sec // used for going down
+const altTime = 30000; // 30sec // used for going up
 const retryTime = 60000 // used for retries
 
 function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
@@ -34,7 +34,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
-        await buy(curPrice, user_id);
+        await buy(curPrice, user_id).catch(() => console.log('buy attempt failed'));
       }
       return wait(altTime).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
     }
@@ -58,7 +58,7 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       // Sell when start going down and if the peak is more than what we bought for
       if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1) {
-        await sell(curPrice, user_id)
+        await sell(curPrice, user_id).catch(() => console.log('sell attempt failed'));
         return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       } else if (await getState(user_id) === 'BUY') {
         console.log(`up again buy: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
@@ -93,13 +93,13 @@ async function getAccountBalance(currency, user_id) {
 }
 
 async function getAmountToBuy(curPrice, user_id) {
-  let balance = await getAccountBalance('USD', user_id)
-  let balanceWithFee = balance - (balance * 0.0035);
-  return (balanceWithFee / curPrice).toFixed(7);
+  let balance = await getAccountBalance('BTC', user_id)
+  // let balanceWithFee = balance - (balance * 0.0035);
+  return (balance / curPrice).toFixed(7);
 }
 
 async function buy(curPrice, user_id) {
-  if (await getAccountBalance('USD', user_id) < 2) { return; }
+  if (await getAccountBalance('BTC', user_id) <= 0) { return; }
   let amount = await getAmountToBuy(curPrice, user_id);
   let body = {
     "trading_pair_id": await getCoin(user_id),
@@ -157,19 +157,21 @@ function createRequest(method, path, body, user_id) {
     method: method,
     url: 'https://api.cobinhood.com/v1' + path,
     headers: {
-      'Authorization': `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfdG9rZW5faWQiOiI0ZTFhYmNiMy1hNTNkLTQyOTMtOWQ5NS1mNGVhNWNmNTk5MTMiLCJzY29wZSI6WyJzY29wZV9leGNoYW5nZV90cmFkZV9yZWFkIiwic2NvcGVfZXhjaGFuZ2VfdHJhZGVfd3JpdGUiLCJzY29wZV9leGNoYW5nZV9sZWRnZXJfcmVhZCJdLCJ1c2VyX2lkIjoiNWE5OGI3ZjYtMmRmMi00MGU3LTlkZWItMGViZTRmZWY2ODVlIn0.sF7GogbeYRZa1h8CJE8u9iu3ddgUzTUmLqdIACQkt_I.V1:cec75e8c28ff14cbd68b69a4385fa97e25170892015f6f39dfd8eb3321d59e94`
+      'Authorization': getSecrets(user_id).API_KEY
     }
+  }
+  if (['POST', 'UPDATE', 'DELETE'].includes(method)) {
+    req.headers.nonce = Math.round((new Date()).getTime() / 1000);
   }
   if (body) req.data = JSON.parse(body);
   return req;
 }
 
 function getSecrets(user_id) {
-  let encoded = process.env[`gdax_secrets_${user_id}`]
+  let encoded = process.env[`cobinhood_secrets_${user_id}`]
   let decoded = Base64.decode(encoded);
 
-  let secs = decoded.split('<+>');
-  return {API_KEY: secs[0], API_SECRET: secs[1], PASSPHRASE: secs[2]}
+  return {API_KEY: decoded}
 }
 
 async function getCurPrice() {
@@ -205,7 +207,6 @@ async function getAccount(id) {
 }
 
 async function restartAll() {
-  return;
   let user_ids = [1]; //only mine for now
   console.log(`Restarting users: ${user_ids}`);
   user_ids.map(async function(user_id) {

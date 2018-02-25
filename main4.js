@@ -50,7 +50,7 @@ app.post('/buy/:id', async function(req, res) {
       res.send(JSON.stringify(out));
     })
     .catch(e => {
-      console.log('error', e);
+      console.log('error', e.response.data);
       res.send(e)
     })
 });

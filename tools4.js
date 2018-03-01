@@ -33,6 +33,7 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
       return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
+      // always buy if price is down
       if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
         await buy(curPrice, user_id).catch(() => console.log('buy attempt failed'));
       }
@@ -207,7 +208,7 @@ async function getAccount(id) {
 }
 
 async function restartAll() {
-  let user_ids = [1]; //only mine for now
+  let user_ids = [1, 2]; //only mine for now
   console.log(`Restarting users: ${user_ids}`);
   user_ids.map(async function(user_id) {
     let coin = await getCoin(user_id);

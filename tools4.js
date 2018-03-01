@@ -38,14 +38,14 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
       if (upticks[`user_${user_id}`] > 0) upticks[`user_${user_id}`] -= .5;
       console.log(`${user_id} down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       // keeps going down so do all this again
-      return wait(getTime(user_id).then(() => goingDown(ogPrice, curPrice, req, user_id));
+      return wait(getTime(user_id)).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       // always buy if price is down
       if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
         await buy(curPrice, user_id).catch(() => console.log('buy attempt failed'));
       }
-      return wait(getAltTime(user_id).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+      return wait(getAltTime(user_id)).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
     }
   })
   .catch(e => {
@@ -62,19 +62,19 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
     let curPrice = Number.parseFloat(res.data.result.ticker.last_trade_price);
     if (curPrice/ lastPrice >= 1) {
       console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
-      return wait(getAltTime(user_id).then(() => goingUp(ogPrice, curPrice, req, user_id));
+      return wait(getAltTime(user_id)).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       // Sell when start going down and if the peak is more than what we bought for
       if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1) {
         await sell(curPrice, user_id).catch(() => console.log('sell attempt failed'));
-        return wait(getTime(user_id).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+        return wait(getTime(user_id)).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       } else if (await getState(user_id) === 'BUY') {
         console.log(`up again buy: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
-        return wait(getAltTime(user_id).then(() => goingUp(ogPrice, curPrice, req, user_id))
+        return wait(getAltTime(user_id)).then(() => goingUp(ogPrice, curPrice, req, user_id))
       } else {
         console.log(`up switch: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
-        return wait(getTime(user_id).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+        return wait(getTime(user_id)).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       }
     }
   })

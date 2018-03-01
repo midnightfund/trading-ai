@@ -13,9 +13,17 @@ const swing = 0.005;
 let upticks = {};
 let downticks = {};
 
-const time = 30000; // 30sec // used for going down
-const altTime = 30000; // 30sec // used for going up
-const retryTime = 60000 // used for retries
+const times = {
+  user_1: {
+    time: 60000,
+    altTime: 30000
+  },
+  default: {
+    time: 30000,
+    altTime: 30000
+  },
+  retry: 60000
+}
 
 function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
   return request(req)
@@ -30,19 +38,19 @@ function goingDown(ogPrice, lastPrice = ogPrice, req, user_id) {
       if (upticks[`user_${user_id}`] > 0) upticks[`user_${user_id}`] -= .5;
       console.log(`${user_id} down again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       // keeps going down so do all this again
-      return wait(time).then(() => goingDown(ogPrice, curPrice, req, user_id));
+      return wait(getTime(user_id).then(() => goingDown(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       // always buy if price is down
       if (await getState(user_id) === 'SELL' && curPrice/ogPrice < 1) {
         await buy(curPrice, user_id).catch(() => console.log('buy attempt failed'));
       }
-      return wait(altTime).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+      return wait(getAltTime(user_id).then(() => goingUp(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
     }
   })
   .catch(e => {
     console.log('error', e)   //print and keep trying
-    wait(retryTime).then(() => goingDown(ogPrice, lastPrice, req, user_id))
+    wait(times.retry).then(() => goingDown(ogPrice, lastPrice, req, user_id))
   })
 }
 
@@ -54,25 +62,25 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
     let curPrice = Number.parseFloat(res.data.result.ticker.last_trade_price);
     if (curPrice/ lastPrice >= 1) {
       console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
-      return wait(altTime).then(() => goingUp(ogPrice, curPrice, req, user_id));
+      return wait(getAltTime(user_id).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);
       // Sell when start going down and if the peak is more than what we bought for
       if (await getState(user_id) === 'BUY' && curPrice/ogPrice >= 1) {
         await sell(curPrice, user_id).catch(() => console.log('sell attempt failed'));
-        return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+        return wait(getTime(user_id).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       } else if (await getState(user_id) === 'BUY') {
         console.log(`up again buy: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
-        return wait(altTime).then(() => goingUp(ogPrice, curPrice, req, user_id))
+        return wait(getAltTime(user_id).then(() => goingUp(ogPrice, curPrice, req, user_id))
       } else {
         console.log(`up switch: ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`)
-        return wait(time).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
+        return wait(getTime(user_id).then(() => goingDown(lastAmmount !== null ? lastAmmount : curPrice, undefined, req, user_id))
       }
     }
   })
   .catch(e => {
     console.log('error', e)//print and keep trying
-    return wait(retryTime).then(() => goingUp(ogPrice, lastPrice, req, user_id))
+    return wait(times.retry).then(() => goingUp(ogPrice, lastPrice, req, user_id))
   })
 }
 
@@ -205,6 +213,16 @@ async function createNewUser(coin) {
 
 async function getAccount(id) {
   return request(createRequest('GET', '/wallet/balances', undefined, id));
+}
+
+function getTime(user_id) {
+  let t = times[`user_${user_id}`] || times.default;
+  return t.altTime;
+}
+
+function getAltTime(user_id) {
+  let t = times[`user_${user_id}`] || times.default;
+  return t.time;
 }
 
 async function restartAll() {

@@ -61,7 +61,7 @@ function goingUp(ogPrice, lastPrice = ogPrice, req, user_id) {
     if (lastAmmount) ogPrice = lastAmmount;
     let curPrice = Number.parseFloat(res.data.result.ticker.last_trade_price);
     if (curPrice/ lastPrice >= 1) {
-      console.log(`up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
+      console.log(`${user_id} up again | ogPrice: ${ogPrice} | curPrice: ${curPrice} | lastPrice: ${lastPrice}`);
       return wait(getAltTime(user_id)).then(() => goingUp(ogPrice, curPrice, req, user_id));
     } else {
       console.log(`switch | ${await getState(user_id)} | curPrice: ${curPrice} | ogPrice: ${ogPrice}`);

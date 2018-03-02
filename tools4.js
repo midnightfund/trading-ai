@@ -177,10 +177,7 @@ function createRequest(method, path, body, user_id) {
 }
 
 function getSecrets(user_id) {
-  let encoded = process.env[`cobinhood_secrets_${user_id}`]
-  let decoded = Base64.decode(encoded);
-
-  return {API_KEY: decoded}
+  return {API_KEY: process.env[`cobinhood_secrets_${user_id}`]}
 }
 
 async function getCurPrice() {

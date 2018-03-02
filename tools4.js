@@ -102,13 +102,13 @@ async function getAccountBalance(currency, user_id) {
 }
 
 async function getAmountToBuy(curPrice, user_id) {
-  let balance = await getAccountBalance(await getCoin(user_id).split('-')[1], user_id)
+  let balance = await getAccountBalance((await getCoin(user_id)).split('-')[1], user_id)
   // let balanceWithFee = balance - (balance * 0.0035);
   return (balance / curPrice).toFixed(7);
 }
 
 async function buy(curPrice, user_id) {
-  if (await getAccountBalance(await getCoin(user_id).split('-')[1], user_id) <= 0) { return; }
+  if (await getAccountBalance((await getCoin(user_id)).split('-')[1], user_id) <= 0) { return; }
   let amount = await getAmountToBuy(curPrice, user_id);
   let body = {
     "trading_pair_id": await getCoin(user_id),
@@ -226,7 +226,7 @@ function getAltTime(user_id) {
 }
 
 async function restartAll() {
-  let user_ids = [1, 2]; //only mine for now
+  let user_ids = [1, 2];
   console.log(`Restarting users: ${user_ids}`);
   user_ids.map(async function(user_id) {
     let coin = await getCoin(user_id);

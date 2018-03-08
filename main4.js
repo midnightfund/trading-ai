@@ -101,7 +101,7 @@ app.post('/start/:id', (req, res) => {
   // request.get('https://sandbox-api.cobinhood.com/v1/market/currencies')
   let opts = {
     method: 'GET',
-    url: `https://api.cobinhood.com/v1/market/tickers/${coin}`,
+    url: `https://api.cobinhood.com/v1/market/tickers/${req.params.id}`,
     headers: {
       'User-Agent': 'express'
     }

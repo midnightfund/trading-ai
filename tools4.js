@@ -223,7 +223,7 @@ function getAltTime(user_id) {
 }
 
 async function restartAll() {
-  let user_ids = [1, 2];
+  let user_ids = [1, 2, 6];
   console.log(`Restarting users: ${user_ids}`);
   user_ids.map(async function(user_id) {
     let coin = await getCoin(user_id);
